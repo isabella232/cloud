@@ -17,6 +17,7 @@
 import os
 from typing import Text
 import uuid
+from absl import logging
 import numpy as np
 import tensorflow as tf
 from tensorflow_cloud.tuner import cloud_fit_client as client
@@ -73,27 +74,6 @@ class CloudFitIntegrationTest(tf.test.TestCase):
         model.compile(optimizer="Adam", loss="mse", metrics=["accuracy"])
         return model
 
-    def test_client_with_tf_1x_raises_error(self):
-        # This test is only applicable to TF 1.x
-        if not utils.is_tf_v1():
-           return
-
-        x = np.random.random((2, 3))
-        y = np.random.randint(0, 2, (2, 2))
-
-        # TF 1.x is not supported, verify proper error is raised for TF 1.x.
-        with self.assertRaises(RuntimeError):
-            client.cloud_fit(
-                self._model(),
-                x=x,
-                y=y,
-                remote_dir="gs://some_test_dir",
-                region=self._region,
-                project_id=self._project_id,
-                image_uri=self._image_uri,
-                epochs=2,
-            )
-
     def test_in_memory_data(self):
         # This test should only run in tf 2.x
         if utils.is_tf_v1():
@@ -122,8 +102,8 @@ class CloudFitIntegrationTest(tf.test.TestCase):
             ),
             epochs=2,
         )
+        logging.info("test_in_memory_data submitted with job id: %s", job_id)
 
-        # TODO(b/169297404) Replace AIP job status logic with utils wrapper
         # Wait for AIP Training job to finish successfully
         self.assertTrue(
             google_api_client.wait_for_api_training_job_completion(
@@ -131,7 +111,7 @@ class CloudFitIntegrationTest(tf.test.TestCase):
 
         # load model from remote dir
         trained_model = tf.keras.models.load_model(os.path.join(
-            remote_dir, "output"))
+            remote_dir, "checkpoint"))
         eval_results = trained_model.evaluate(x, y)
 
         # Accuracy should be better than zero
